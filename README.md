@@ -1,8 +1,7 @@
 ### Hi, I'm Maksim
 
 Neuroimmunologist by training (PhD), now working on statistical programming and applied AI
-for clinical and biomedical data in SAS, R and Python. I like code that shows its work:
-run logs, checks against a reference, and decisions written down.
+for clinical and biomedical data in SAS, R and Python.
 
 **Clinical data:** [clinical-reporting-pharmaverse](https://github.com/Maks1m-Se/clinical-reporting-pharmaverse),
 selected SDTM and ADaM examples, a TEAE table and two figures in R with the pharmaverse,
