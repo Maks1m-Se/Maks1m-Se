@@ -33,9 +33,15 @@ ROOT = {"C": 36, "F": 41, "G": 43}
 FIGURE = [7, 7, 9, 9, 7, 7, 9, 9]                 # left hand over the root, per eighth: G G | A A | G G | A A
 LH_VEL = (0.21, 0.16)                             # left hand loudness: root, upper note
 SCALE = [60, 63, 65, 66, 67, 70, 72]              # C blues scale, Saturday (bottom row) ... Sunday (top row)
-VEL = [0, 0.07, 0.105, 0.15, 0.18]                # loudness per level
+VEL = [0, 0.07, 0.105, 0.135, 0.155]              # loudness per level (top kept modest for small speakers)
 BRIGHT = [0, 0.55, 0.75, 0.95, 1.05]              # softer notes are darker, like a real piano
-SR, FPS, LEAD, TAIL = 48000, 30, 0.6, 2.6         # TAIL: final chord rings after the last bar
+OCTAVE = 0.035                                    # level 4 adds a soft octave above
+ROOT_BODY = 0.3                                   # overtones on the left-hand root, so it is heard clearly
+FINAL_BASS, FINAL_OCT, FINAL_VEL = 0.055, 0.035, 0.021  # final C9: low C, its octave, the other notes
+RING, ROLL = 7.0, 0.045                           # the final chord rings 7 s, rolled upwards 45 ms per note
+TARGET_RMS = -20.0                                # average loudness in dBFS; peaks are limited to -1.5 dBFS
+SR, FPS, LEAD = 48000, 30, 0.6
+TAIL = RING + 4 * ROLL + 0.6                      # the final chord rings after the last bar
 
 
 def slot_off(s):
@@ -110,9 +116,14 @@ def piano(buf, m, t0, vel, length=0.9, bright=1.0):
     add(buf, t0, sig * envelope(n, 0.006, vel, length))
 
 
-def bass(buf, m, t0, dur, vel):
+def bass(buf, m, t0, dur, vel, body=0.0):
+    """Left-hand note: a triangle; `body` adds overtones so the pitch also comes through small speakers."""
     n = int((dur + 0.05) * SR)
-    add(buf, t0, triangle(m, n) * envelope(n, 0.01, vel, max(0.05, dur * 0.95)))
+    sig = triangle(m, n)
+    if body:
+        w = 2 * np.pi * hz(m) * np.arange(n) / SR
+        sig = sig + body * (np.sin(2 * w) + 0.5 * np.sin(3 * w) + 0.2 * np.sin(4 * w))
+    add(buf, t0, sig * envelope(n, 0.01, vel, max(0.05, dur * 0.95)))
 
 
 def compress(x, thr=-10.0, knee=12.0, ratio=3.0, att=0.005, rel=0.2, look=0.006, block=32):
@@ -134,25 +145,47 @@ def compress(x, thr=-10.0, knee=12.0, ratio=3.0, att=0.005, rel=0.2, look=0.006,
     return x * 10 ** (np.interp(np.arange(len(x)), centres, gain_db) / 20)
 
 
-def render_audio(slots):
+def render_audio(slots, left=True, right=True):
     te = LEAD + BARS * BAR
     buf = np.zeros(int((te + TAIL) * SR))
     for sl in slots:
         root, dur = ROOT[sl["chord"]], slot_dur(sl["slot"])
-        bass(buf, root, sl["t"], dur, LH_VEL[0])
-        bass(buf, root + FIGURE[sl["slot"]], sl["t"], dur, LH_VEL[1])
+        if left:
+            bass(buf, root, sl["t"], dur, LH_VEL[0], ROOT_BODY)
+            bass(buf, root + FIGURE[sl["slot"]], sl["t"], dur, LH_VEL[1])
         lv, m = sl["lv"], sl["midi"]
-        if lv:
+        if lv and right:
             piano(buf, m, sl["t"], VEL[lv], 0.9, BRIGHT[lv])
             if lv == 4:
-                piano(buf, m + 12, sl["t"], 0.045, 0.7, 0.35)
+                piano(buf, m + 12, sl["t"], OCTAVE, 0.7, 0.35)
             if sl["ghost"]:
                 piano(buf, m - 1, sl["t"] - BEAT / 4, 0.04, 0.16, 0.4)
-    bass(buf, 36, te, 1.6, 0.34)                  # final C7
-    for m in (58, 64, 67, 72):
-        piano(buf, m, te, 0.07, 1.8)
+    if left and right:
+        bass(buf, 36, te, RING, FINAL_BASS, 1.0)  # final C9: a clear low C with its octave ...
+        piano(buf, 48, te, FINAL_OCT, RING)
+        for k, m in enumerate((64, 67, 70, 74)):  # ... then E G Bb D, rolled upwards
+            piano(buf, m, te + ROLL * (k + 1), FINAL_VEL, RING)
+    if not (left and right):
+        return buf                                # a single hand, unmastered (for checks)
     out = compress(0.8 * buf)
-    return out / np.abs(out).max() * 10 ** (-1 / 20)                # peak at -1 dBFS
+    out *= 10 ** (TARGET_RMS / 20) / np.sqrt(np.mean(out ** 2))
+    return limit(out)
+
+
+def limit(x, ceiling_db=-1.5, look=0.005, rel=0.12, block=32):
+    """Look-ahead peak limiter: only the loudest moments are turned down, quickly and smoothly."""
+    ceiling = 10 ** (ceiling_db / 20)
+    nb = -(-len(x) // block)
+    peaks = np.abs(np.pad(x, (0, nb * block - len(x)))).reshape(nb, block).max(1)
+    need = np.minimum(1.0, ceiling / np.maximum(peaks, 1e-9))
+    L = max(1, round(look * SR / block))
+    ahead = np.lib.stride_tricks.sliding_window_view(np.pad(need, (1, L), constant_values=1.0), L + 2).min(1)
+    a, g, cur = np.exp(-block / (rel * SR)), np.empty(nb), 1.0
+    for i, v in enumerate(ahead):                 # instant attack, smooth release
+        cur = v if v < cur else a * cur + (1 - a) * v
+        g[i] = cur
+    y = x * np.interp(np.arange(len(x)), (np.arange(nb) + 0.5) * block, g)
+    return np.clip(y, -ceiling, ceiling)
 
 
 def write_wav(path, x):
@@ -317,7 +350,9 @@ class Picture:
                 scale = 1 + (POP[sl["lv"]] - 1) * (1 - u) ** 2 if sl["lv"] and u < 1 else 1
                 self._paste(img, sl, self._sprite(0, scale, True), alpha)
         d = ImageDraw.Draw(img)
-        if 0 <= p and t < end_t:
+        if end_t <= t < end_t + 4:
+            left, right = "C9", self.idle[1]
+        elif 0 <= p and t < end_t:
             sl = self.slots[p]
             left = f"{sl['chord']}7 · chorus {sl['bar'] // 12 + 1} of 4 · bar {sl['bar'] % 12 + 1}"
             right = f"{sl['day']:%a, %d %b %Y}".replace(" 0", " ")
@@ -367,7 +402,7 @@ def api(url, token, body, content_type="application/json"):
         raise RuntimeError(f"HTTP {e.code} from {url.split('?')[0]}: {e.read().decode(errors='replace')[:500]}")
 
 
-CAL = "contributionCalendar { weeks { contributionDays { date contributionCount contributionLevel } } }"
+CAL = "contributionCalendar { totalContributions weeks { contributionDays { date contributionCount contributionLevel } } }"
 LEVEL = {"NONE": 0, "FIRST_QUARTILE": 1, "SECOND_QUARTILE": 2, "THIRD_QUARTILE": 3, "FOURTH_QUARTILE": 4}
 
 
@@ -377,15 +412,16 @@ def calendar(login, token, span=None):
     res = api("https://api.github.com/graphql", token, json.dumps({"query": query}).encode())
     if "errors" in res:
         raise RuntimeError(f"GitHub API error: {res['errors']}")
-    weeks = res["data"]["user"]["contributionsCollection"]["contributionCalendar"]["weeks"]
-    return {d["date"]: d for w in weeks for d in w["contributionDays"]}
+    cal = res["data"]["user"]["contributionsCollection"]["contributionCalendar"]
+    days = {d["date"]: d for w in cal["weeks"] for d in w["contributionDays"]}
+    return days, cal["totalContributions"]
 
 
 def fetch(login, out_path):
     tokens = [(k, os.environ[k]) for k in ("GH_TOKEN", "BLUES_PAT") if os.environ.get(k)]
     for name, token in tokens:                    # the Actions token shows what visitors see; the PAT is a fallback
         try:
-            year = calendar(login, token)         # exactly what the profile shows
+            year, total = calendar(login, token)  # exactly what the profile shows
             break
         except RuntimeError as e:
             print(f"{name} could not read the calendar: {e}")
@@ -394,7 +430,7 @@ def fetch(login, out_path):
     end = dt.date.fromisoformat(max(year))
     start = end - dt.timedelta(days=DAYS - 1)
     first = dt.date.fromisoformat(min(year))
-    older = calendar(login, token, (start.isoformat(), (first - dt.timedelta(days=1)).isoformat())) if first > start else {}
+    older = calendar(login, token, (start.isoformat(), (first - dt.timedelta(days=1)).isoformat()))[0] if first > start else {}
     # GitHub's colours are quartiles of this year, so older days get this year's thresholds
     floors = sorted({(min(d["contributionCount"] for d in year.values() if LEVEL[d["contributionLevel"]] == lv), lv)
                      for lv in range(1, 5) if any(LEVEL[d["contributionLevel"]] == lv for d in year.values())})
@@ -409,7 +445,9 @@ def fetch(login, out_path):
             levels[day] = level(older.get(day, {"contributionCount": 0})["contributionCount"])
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"end": end.isoformat(), "levels": levels}, f)
-    print(f"{login}: {sum(1 for v in levels.values() if v)} active days from {start} to {end}")
+    active = sum(1 for d in year.values() if d["contributionCount"])
+    print(f"read with {name}: {total} contributions in the last year on {active} days (as above your profile graph)")
+    print(f"the piece: {sum(1 for v in levels.values() if v)} notes from {start} to {end}")
 
 
 def upload(video, name, repo_id):
