@@ -1,0 +1,43 @@
+name: Contribution Blues
+on:
+  schedule:
+    - cron: "17 4 * * 1"       # every Monday, 04:17 UTC
+  workflow_dispatch:            # plus a "Run workflow" button
+permissions:
+  contents: write               # to commit the new video link into README.md
+concurrency: contribution-blues
+jobs:
+  blues:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-liberation
+          pip install --quiet numpy pillow
+      - name: Fetch contributions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BLUES_PAT: ${{ secrets.BLUES_PAT }}
+        run: python contribution_blues.py fetch "${{ github.repository_owner }}" levels.json
+      - name: Render video
+        run: python contribution_blues.py render levels.json contribution-blues.mp4
+      - name: Upload video
+        id: upload
+        env:
+          BLUES_PAT: ${{ secrets.BLUES_PAT }}
+        run: |
+          url=$(python contribution_blues.py upload contribution-blues.mp4 contribution-blues.mp4 "${{ github.repository_id }}")
+          echo "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Update README
+        run: |
+          python contribution_blues.py readme README.md "${{ steps.upload.outputs.url }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet || { git commit -m "Update Contribution Blues video"; git push; }
