@@ -4,6 +4,9 @@ Neuroimmunologist by training (PhD), now working on statistical programming and 
 for clinical and biomedical data in SAS, R and Python.
 
 <!-- contribution-blues:start -->
+
+https://github.com/user-attachments/assets/a0294b75-b144-4c44-a7fc-09c6bd62ec5d
+
 <!-- contribution-blues:end -->
 
 **Clinical data:** [clinical-reporting-pharmaverse](https://github.com/Maks1m-Se/clinical-reporting-pharmaverse),
