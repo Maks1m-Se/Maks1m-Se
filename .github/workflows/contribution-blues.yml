@@ -1,4 +1,6 @@
 name: Contribution Blues
+# Needs the repository secret BLUES_PAT: a classic personal access token with the public_repo scope.
+# It expires after a year (GitHub emails a reminder). Renew it, then update the secret.
 on:
   schedule:
     - cron: "17 4 * * 1"       # every Monday, 04:17 UTC
