@@ -3,6 +3,9 @@
 Neuroimmunologist by training (PhD), now working on statistical programming and applied AI
 for clinical and biomedical data in SAS, R and Python.
 
+<!-- contribution-blues:start -->
+<!-- contribution-blues:end -->
+
 **Clinical data:** [clinical-reporting-pharmaverse](https://github.com/Maks1m-Se/clinical-reporting-pharmaverse),
 selected SDTM and ADaM examples, a TEAE table and two figures in R with the pharmaverse,
 plus a Python LLM query agent. Every script ships its run log.
