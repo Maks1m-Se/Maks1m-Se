@@ -1,7 +1,6 @@
 ### Hi, I'm Maksim
 
-Neuroimmunologist by training (PhD), now working on statistical programming and applied AI
-for clinical and biomedical data in SAS, R and Python.
+Neuroimmunologist by training (PhD), now working on statistical programming and applied AI in SAS, R and Python.
 
 <!-- contribution-blues:start -->
 
