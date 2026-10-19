@@ -4,7 +4,7 @@ Neuroimmunologist by training (PhD), now working on statistical programming and 
 
 <!-- contribution-blues:start -->
 
-https://github.com/user-attachments/assets/1eac3b57-115b-417f-8160-bfe890c2057d
+https://github.com/user-attachments/assets/4705997e-2e73-4add-afee-cdb5a04d491e
 
 <!-- contribution-blues:end -->
 
