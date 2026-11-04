@@ -16,7 +16,7 @@ plus a Python LLM query agent. Every script ships its run log.
 data from rules or examples. Early prototype.
 
 **Built for fun and for my own use:** [Nota](https://github.com/Maks1m-Se/nota), a tablet
-setlist manager for live gigs (Flutter) · a [three-body gravity simulation](https://maks1m-se.github.io/three_body_web/)
+setlist manager for live gigs (Flutter) · [Klavo](https://github.com/Maks1m-Se/klavo), a piano and practice metronome for Android and the web · a [three-body gravity simulation](https://maks1m-se.github.io/three_body_web/)
 in the browser (Python, NumPy) · small tools and games on [my website](https://maks1m-se.github.io/webpage_portfolio/)
 
 [LinkedIn](https://www.linkedin.com/in/dr-maksim-sendetski-07a18a14b) · Off the keyboard: piano in the rock 'n' roll band [Primebeats](https://www.primebeats.de/).
